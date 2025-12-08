@@ -1,4 +1,5 @@
 import pytest
+import os
 from playwright.sync_api import sync_playwright
 
 @pytest.fixture
@@ -8,6 +9,7 @@ def browser():
         yield browser
         browser.close()
 
+@pytest.mark.skipif(os.getenv("GITHUB_ACTIONS") == "true", reason="E2E test requires running server")
 def test_swagger_ui(browser):
     page = browser.new_page()
     page.goto("http://127.0.0.1:8000/docs")
