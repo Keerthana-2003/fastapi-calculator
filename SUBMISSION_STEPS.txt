@@ -1,0 +1,188 @@
+# MODULE 10 SUBMISSION STEPS
+
+Your repo is ready at: https://github.com/Keerthana-2003/fastapi-calculator (module-10-submission branch)
+
+## What You Need to Submit
+
+For the assignment submission, you need to provide:
+
+1. **GitHub Repository Link**
+2. **Screenshots** (minimum 2, up to 10)
+3. **Reflection Document** (1-2 pages)
+
+---
+
+## STEP 1: Prepare GitHub Actions Screenshots
+
+Your CI/CD is already working. Take these screenshots:
+
+### Screenshot 1: GitHub Actions Workflow Success
+- Go to: https://github.com/Keerthana-2003/fastapi-calculator
+- Click: **Actions** tab
+- Click the latest workflow run
+- Screenshot showing: Green checkmark, "tests passed", "Docker image pushed"
+
+### Screenshot 2: Docker Hub Repository
+- Go to: https://hub.docker.com/r/Keerthanam2k3/fastapi-calculator
+- Screenshot showing: Repository name, image tags (latest and commit SHA)
+
+---
+
+## STEP 2: Take Application Screenshots
+
+These show the functionality works:
+
+### Screenshot 3: API Endpoints (Swagger UI)
+- Run: `docker-compose up --build`
+- Open: http://localhost:8000/docs
+- Screenshot showing: All endpoints listed (register, login, calculator)
+
+### Screenshot 4: User Registration Test
+- In Swagger, click POST /users/register
+- Enter test data:
+  ```json
+  {
+    "username": "testuser",
+    "email": "test@example.com",
+    "password": "TestPass123"
+  }
+  ```
+- Screenshot showing: Response 201 Created with user data (NO password in response)
+
+### Screenshot 5: User Login Test
+- Click POST /users/login
+- Enter:
+  ```json
+  {
+    "email": "test@example.com",
+    "password": "TestPass123"
+  }
+  ```
+- Screenshot showing: Response 200 OK with "Login successful"
+
+### Screenshot 6: Test Results
+- Run command: `pytest tests/ --ignore=tests/test_e2e.py -v`
+- Screenshot showing: "54 passed" in terminal output
+
+---
+
+## STEP 3: Create Reflection Document
+
+Create a Word/PDF document (1-2 pages) addressing:
+
+**Title:** Module 10 Reflection - Secure User Model Implementation
+
+**What to write:**
+
+1. **What was accomplished** (3-4 sentences)
+   - Implemented user registration and login endpoints
+   - Added password hashing with bcrypt
+   - Set up database models with unique constraints
+   - Configured CI/CD pipeline with GitHub Actions and Docker Hub
+
+2. **Key features implemented** (bullet points)
+   - SQLAlchemy User model with password_hash and unique username/email
+   - Pydantic schemas for UserCreate and UserRead
+   - bcrypt password hashing with hash_password() and verify_password()
+   - POST /users/register endpoint
+   - POST /users/login endpoint
+   - 54 passing unit and integration tests
+
+3. **How tests verify functionality** (2-3 sentences)
+   - Unit tests verify password hashing works correctly
+   - Schema tests ensure email and password validation
+   - Integration tests confirm user registration/login work with database
+   - All 54 tests pass in GitHub Actions with real PostgreSQL container
+
+4. **CI/CD Pipeline** (2-3 sentences)
+   - GitHub Actions automatically runs tests on every commit
+   - Docker image is built and pushed to Docker Hub on success
+   - Image is tagged with commit SHA and "latest"
+   - Pipeline ensures code quality before deployment
+
+5. **Challenges faced** (optional, 1-2 sentences)
+   - Any issues you encountered and how you solved them
+   - If none, you can skip this
+
+6. **What's next** (1-2 sentences)
+   - Module 11 will add Calculation model with factory pattern
+   - Modules 12-14 will complete CRUD operations and frontend
+
+---
+
+## STEP 4: Prepare Submission
+
+Gather these files for submission:
+
+```
+To Submit:
+1. GitHub Link: https://github.com/Keerthana-2003/fastapi-calculator
+2. Screenshots (6 files):
+   - GitHub Actions workflow success
+   - Docker Hub repository  
+   - Swagger UI endpoints
+   - User registration response
+   - User login response
+   - Test results (54 passed)
+3. Reflection document (Module10_Reflection.pdf or .docx)
+```
+
+---
+
+## STEP 5: Submit on Canvas/Blackboard
+
+1. Open your course portal
+2. Go to Module 10 assignment
+3. Submission should ask for:
+   - **Website URL or File Upload**
+   
+For website URL:
+- Submit: https://github.com/Keerthana-2003/fastapi-calculator
+
+For file upload (if required):
+- Create a folder with:
+  - README.txt with GitHub link
+  - Screenshots (6 files, numbered)
+  - Reflection document
+- Zip the folder
+- Upload
+
+---
+
+## FINAL CHECKLIST
+
+Before submitting, verify:
+
+- [ ] Code is in module-10-submission branch (ready)
+- [ ] README.md has setup instructions (ready)
+- [ ] All 54 tests pass locally
+- [ ] GitHub Actions workflow shows success
+- [ ] Docker image pushed to Docker Hub
+- [ ] Screenshots are clear and readable
+- [ ] Reflection document is 1-2 pages
+- [ ] All file names are correct (no typos)
+- [ ] Reflection addresses all 4-5 main points
+
+---
+
+## GRADING (100 points total)
+
+**Submission Completeness (50 points):**
+- GitHub link ✓
+- All files present (code, tests, workflows) ✓  
+- Screenshots showing functionality ✓
+- Reflection document ✓
+- README with instructions ✓
+
+**Functionality (50 points):**
+- User model with unique constraints ✓
+- Password hashing with bcrypt ✓
+- Pydantic validation ✓
+- Registration/login endpoints ✓
+- 54 passing tests ✓
+- CI/CD pipeline working ✓
+- Docker image in Docker Hub ✓
+
+---
+
+**You're done! Submit and move to Module 11.**
