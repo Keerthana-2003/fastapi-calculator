@@ -1,123 +1,83 @@
 # FastAPI Calculator
 
-A calculator API with user authentication built with FastAPI and PostgreSQL.
+A FastAPI application with user authentication, password hashing, and PostgreSQL database.
 
-## Setup
+## Features
 
-### With Docker Compose
-```bash
-docker-compose up --build
-```
-
-Access at:
-- API: http://localhost:8000
-- Docs: http://localhost:8000/docs
-- pgAdmin: http://localhost:5050 (admin@admin.com / admin)
-
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run tests
-pytest -v
-
-# Start app
-uvicorn app.main:app --reload
-```
-
-## API Endpoints
-
-### User Registration
-```
-POST /users/register
-{
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "securepass123"
-}
-```
-
-### User Login
-```
-POST /users/login
-{
-  "email": "john@example.com",
-  "password": "securepass123"
-}
-```
-
-### Get User
-```
-GET /users/{user_id}
-```
-
-### Calculator
-- `GET /add?a=5&b=3`
-- `GET /subtract?a=5&b=3`
-- `GET /multiply?a=5&b=3`
-- `GET /divide?a=6&b=3`
+- User registration and login with bcrypt password hashing
+- SQLAlchemy ORM for database operations
+- Pydantic input validation
+- Calculator API (add, subtract, multiply, divide)
+- PostgreSQL with Docker Compose
+- Unit and integration tests
+- GitHub Actions CI/CD pipeline
+- Docker Hub deployment
 
 ## Project Structure
 
 ```
 app/
-  ├── main.py          # Routes and endpoints
-  ├── database.py      # SQLAlchemy models and setup
-  ├── schemas.py       # Pydantic schemas
-  ├── security.py      # Password hashing
-  └── operations.py    # Calculator logic
+  main.py           - FastAPI application and endpoints
+  database.py       - SQLAlchemy models
+  schemas.py        - Pydantic schemas
+  security.py       - Password hashing
+  operations.py     - Calculator logic
 
 tests/
-  ├── test_main.py     # Calculator tests
-  ├── test_security.py # Password hashing tests
-  ├── test_schemas.py  # Validation tests
-  └── test_user_integration.py  # User endpoint tests
+  test_security.py        - Password hashing tests
+  test_schemas.py         - Schema validation tests
+  test_user_integration.py - User endpoint tests
+  test_main.py            - Calculator tests
 ```
 
-## Database
+## Setup and Run
 
-Tables: `users` and `calculations`
-
-Users table has unique constraints on username and email.
-Passwords are hashed with bcrypt before storage.
-
-## Testing
+### Using Docker Compose
 
 ```bash
-# Run all tests
-pytest -v
-
-# Run specific test file
-pytest tests/test_security.py -v
-
-# Run with coverage
-pytest --cov=app tests/
+git clone https://github.com/Keerthana-2003/fastapi-calculator.git
+cd fastapi-calculator
+docker-compose up --build
 ```
 
-## Requirements
+Access:
+- FastAPI: http://localhost:8000/docs
+- pgAdmin: http://localhost:5050 (admin@admin.com / admin)
 
-- Python 3.11+
-- PostgreSQL 15+
-- Docker (optional)
+### Local Development
 
-## GitHub Actions CI/CD
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
-Tests run automatically on push. On success, Docker image is pushed to Docker Hub.
+Run application:
+```bash
+uvicorn app.main:app --reload
+```
 
-Add these secrets to your repository:
-- `DOCKER_USERNAME`
-- `DOCKER_PASSWORD`
+## Running Tests
 
-Docker image: `Keerthanam2k3/fastapi-calculator:latest`
-- **Module 12**: BREAD endpoints for calculations
-- **Module 13**: JWT authentication and frontend pages
-- **Module 14**: Complete BREAD functionality in frontend
+```bash
+pytest tests/ --ignore=tests/test_e2e.py -v
+```
 
-## License
+Expected: 54 tests passing
 
-This project is part of an academic assignment and is provided as-is for educational purposes.
+## Database Models
 
-## Contact
+**users table**
+- id (Primary Key)
+- username (unique)
+- email (unique)
+- password_hash (bcrypt)
+- created_at (timestamp)
 
-For questions or issues, please create an issue in the repository or contact the project owner.
+**calculations table**
+- id (Primary Key)
+- operation
+- operand_a, operand_b
+- result
+- timestamp
+- user_id (Foreign Key)
