@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Pytest cache
+.pytest_cache/
+
+# Editor dirs
+.vscode/
+
+# OS files
+.DS_Store
+
+# Personal submission guide (do NOT commit)
+submissionguide.md
