@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 # copy app
 COPY . .
 
-# expose port and run
+# copy and make startup script executable
+RUN chmod +x ./wait_for_db_and_run.sh
+
+# expose port and run (startup script waits for DB)
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./wait_for_db_and_run.sh"]
