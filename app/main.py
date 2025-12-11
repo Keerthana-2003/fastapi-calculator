@@ -5,8 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from contextlib import asynccontextmanager
 
 from app.operations import add, subtract, multiply, divide
-from app.database import get_db, init_db, User
-from app.schemas import UserCreate, UserRead, UserLogin
+from app.database import get_db, init_db, User, Calculation
+from app.schemas import UserCreate, UserRead, UserLogin, CalculationCreate, CalculationRead
+from app.calculation_factory import CalculationFactory
 from app.security import hash_password, verify_password
 
 # Set up logging
@@ -184,3 +185,165 @@ def api_divide(a: float, b: float):
     except ValueError as e:
         logging.error(f"Error dividing {a} / {b}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==================== CALCULATION ENDPOINTS (BREAD) ====================
+
+@app.post("/calculations", response_model=CalculationRead, status_code=status.HTTP_201_CREATED)
+def add_calculation(calc: CalculationCreate, user_id: int, db: Session = Depends(get_db)):
+    """
+    Create a new calculation record.
+    Computes result using CalculationFactory and stores in database.
+    """
+    try:
+        # Verify user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Compute result using factory
+        result = CalculationFactory.compute(calc.operation, calc.operand_a, calc.operand_b)
+        
+        # Create calculation record
+        db_calc = Calculation(
+            operation=calc.operation,
+            operand_a=calc.operand_a,
+            operand_b=calc.operand_b,
+            result=result,
+            user_id=user_id
+        )
+        
+        db.add(db_calc)
+        db.commit()
+        db.refresh(db_calc)
+        
+        logging.info(f"Calculation created: {calc.operation}({calc.operand_a}, {calc.operand_b}) = {result}")
+        return CalculationRead.model_validate(db_calc)
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logging.error(f"Invalid calculation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error creating calculation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error creating calculation"
+        )
+
+
+@app.get("/calculations", response_model=list[CalculationRead])
+def browse_calculations(user_id: int, db: Session = Depends(get_db)):
+    """
+    Browse all calculations for a user.
+    """
+    # Verify user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    calculations = db.query(Calculation).filter(Calculation.user_id == user_id).all()
+    return [CalculationRead.model_validate(c) for c in calculations]
+
+
+@app.get("/calculations/{calc_id}", response_model=CalculationRead)
+def read_calculation(calc_id: int, user_id: int, db: Session = Depends(get_db)):
+    """
+    Read a specific calculation by ID.
+    Verifies the calculation belongs to the user.
+    """
+    calc = db.query(Calculation).filter(
+        (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+    ).first()
+    
+    if not calc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Calculation not found"
+        )
+    
+    return CalculationRead.model_validate(calc)
+
+
+@app.put("/calculations/{calc_id}", response_model=CalculationRead)
+def edit_calculation(calc_id: int, calc_update: CalculationCreate, user_id: int, db: Session = Depends(get_db)):
+    """
+    Update an existing calculation.
+    Recomputes result based on new operands/operation.
+    """
+    try:
+        calc = db.query(Calculation).filter(
+            (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+        ).first()
+        
+        if not calc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Calculation not found"
+            )
+        
+        # Compute new result
+        result = CalculationFactory.compute(calc_update.operation, calc_update.operand_a, calc_update.operand_b)
+        
+        # Update fields
+        calc.operation = calc_update.operation
+        calc.operand_a = calc_update.operand_a
+        calc.operand_b = calc_update.operand_b
+        calc.result = result
+        
+        db.commit()
+        db.refresh(calc)
+        
+        logging.info(f"Calculation {calc_id} updated")
+        return CalculationRead.model_validate(calc)
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logging.error(f"Invalid calculation update: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error updating calculation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error updating calculation"
+        )
+
+
+@app.delete("/calculations/{calc_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_calculation(calc_id: int, user_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a calculation by ID.
+    Verifies the calculation belongs to the user.
+    """
+    calc = db.query(Calculation).filter(
+        (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+    ).first()
+    
+    if not calc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Calculation not found"
+        )
+    
+    db.delete(calc)
+    db.commit()
+    
+    logging.info(f"Calculation {calc_id} deleted")
+    return None
+

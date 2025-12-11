@@ -1,8 +1,8 @@
-# FastAPI Calculator - Module 11 Implementation
+# FastAPI Calculator - Module 12 Implementation
 
 ## Overview
 
-This document describes the implementation of Module 11: Calculation Model with Pydantic validation, factory pattern, and testing.
+This document describes the implementation of Module 12: User & Calculation Routes with BREAD operations and comprehensive testing.
 
 ## Implementation Summary
 
@@ -22,36 +22,40 @@ Module 11 adds targeted tests for the calculation model and factory:
 All tests (now 58 total) pass locally.
 
 ### Docker Deployment
-Multi-container setup using Docker Compose:
-- FastAPI service (Python 3.11, Uvicorn)
+### User Endpoints
+- **POST /users/register** - Create new user with bcrypt password hashing and uniqueness validation
+- **POST /users/login** - Authenticate user by verifying password against stored hash
+- **GET /users/{id}** - Retrieve user profile information
 - PostgreSQL 15 database
-- pgAdmin 4 for database management
-- Health check script to wait for database readiness before starting app
-- All services automatically initialized on startup
+### Calculation Endpoints (BREAD)
+All calculation endpoints accept `user_id` as a query parameter to enforce user-scoped operations and isolation.
+
+- **POST /calculations** - Create a new calculation (Add). Accepts operation, operand_a, operand_b. Result is computed using CalculationFactory and validated with CalculationCreate schema.
+- **GET /calculations** - Retrieve all calculations for the authenticated user (Browse). Returns list of CalculationRead objects.
+- **GET /calculations/{id}** - Retrieve a specific calculation by ID (Read). Returns single CalculationRead object. Returns 404 if not found or owned by different user.
+- **PUT /calculations/{id}** - Update an existing calculation (Edit). Accepts operation, operand_a, operand_b. Result is recomputed. Returns 404 if not found or owned by different user.
+- **DELETE /calculations/{id}** - Delete a calculation (Delete). Returns 404 if not found or owned by different user.
 
 ### CI/CD Pipeline
-# GitHub Actions workflow:
+Total: **70 tests passing** locally (verified with pytest).
 - Runs on push/pull requests to `main`, `docker-postgres-setup`, `module-10-submission`, and `module-11-submission` branches
-- PostgreSQL service container for testing
-- Executes all tests as part of CI (unit + integration; e2e excluded by default)
-- Builds and pushes Docker image to Docker Hub
+Test categories:
+- **User registration/login**: 19 tests covering registration, duplicate emails, login success/failure
+- **User endpoints**: 5 tests for GET /users/{id} with valid/invalid IDs
+- **Calculation BREAD endpoints**: 15 integration tests covering Create, Browse, Read, Update, Delete, and error handling (404s for non-existent resources, 422 for validation errors, 400 for business logic)
+- **Pydantic schema validation**: 18 tests for request/response schema validation
+- **Password hashing**: 7 tests for bcrypt integration and security
+- **Calculation model/factory**: 6 tests for SQLAlchemy Calculation model and CalculationFactory.compute()
 
-## Architecture
+All tests verify user isolation (users can only access/modify their own calculations).
+- PostgreSQL service container for testing
 
 ### Project Structure
 ```
-app/
-  __init__.py           - Package marker
-  main.py              - FastAPI application and endpoints
-  database.py          - SQLAlchemy setup and models
-  schemas.py           - Pydantic validation schemas
   security.py          - Password hashing functions
   operations.py        - Calculator operation logic
-
-tests/
-  __init__.py          - Package marker
-  test_main.py         - Calculator endpoint tests
-  test_operations.py   - Operation logic tests
+GitHub Actions workflow:
+- Executes all 70 tests as part of CI (unit + integration; e2e excluded by default)
   test_schemas.py      - Pydantic validation tests
   test_security.py     - Password hashing tests
   test_user_integration.py - User endpoint integration tests
@@ -84,26 +88,12 @@ All 56 tests passing locally (unit + integration; e2e excluded). The new integra
 ### Cloud Codespace / Local Testing
 Run tests:
 ```
-pytest tests/ --ignore=tests/test_e2e.py -v
-```
-
 To run only Module 11 tests:
 ```
-pytest tests/test_schemas.py tests/test_operations.py tests/test_calculation_integration.py -q
-```
-
-### Docker Compose
-Start services if you want to test with Postgres instead of in-memory DBs:
 ```
 docker-compose up --build
 ```
 
-Access Swagger UI at http://localhost:8000/docs
-## Deployment
-
-### Docker Hub
-Image pushed to Docker Hub repository:
-- Repository: Keerthanam2k3/fastapi-calculator
 - Tags: latest, commit SHA
 
 ![alt text](image-4.png)

@@ -308,3 +308,156 @@ class TestCalculatorEndpoints:
         response = client.get("/divide?a=5&b=0")
         assert response.status_code == 400
         assert "Cannot divide by zero" in response.json()["detail"]
+
+
+class TestCalculationBREAD:
+    """Integration tests for calculation BREAD endpoints"""
+
+    def setup_method(self):
+        """Clear database and create test user before each test"""
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        
+        # Create a test user
+        client.post(
+            "/users/register",
+            json={
+                "username": "testuser",
+                "email": "test@example.com",
+                "password": "secure_password"
+            }
+        )
+        self.user_id = 1
+
+    def test_add_calculation_success(self):
+        """Test creating a new calculation"""
+        response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "add", "operand_a": 5.0, "operand_b": 3.0}
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["operation"] == "add"
+        assert data["result"] == 8.0
+        assert data["user_id"] == self.user_id
+
+    def test_add_calculation_subtract(self):
+        """Test creating a subtraction calculation"""
+        response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "subtract", "operand_a": 10.0, "operand_b": 3.0}
+        )
+        assert response.status_code == 201
+        assert response.json()["result"] == 7.0
+
+    def test_add_calculation_invalid_operation(self):
+        """Test with invalid operation type"""
+        response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "power", "operand_a": 2.0, "operand_b": 3.0}
+        )
+        assert response.status_code == 422
+
+    def test_add_calculation_nonexistent_user(self):
+        """Test creating calculation for non-existent user"""
+        response = client.post(
+            "/calculations",
+            params={"user_id": 999},
+            json={"operation": "add", "operand_a": 2.0, "operand_b": 3.0}
+        )
+        assert response.status_code == 404
+
+    def test_browse_calculations_empty(self):
+        """Test browsing calculations when none exist"""
+        response = client.get("/calculations", params={"user_id": self.user_id})
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_browse_calculations_multiple(self):
+        """Test browsing multiple calculations"""
+        # Create 2 calculations
+        for op, a, b in [("add", 2, 3), ("multiply", 4, 5)]:
+            client.post(
+                "/calculations",
+                params={"user_id": self.user_id},
+                json={"operation": op, "operand_a": a, "operand_b": b}
+            )
+        
+        response = client.get("/calculations", params={"user_id": self.user_id})
+        assert response.status_code == 200
+        assert len(response.json()) == 2
+
+    def test_read_calculation_success(self):
+        """Test retrieving a single calculation"""
+        # Create a calculation
+        post_response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "multiply", "operand_a": 3.0, "operand_b": 4.0}
+        )
+        calc_id = post_response.json()["id"]
+        
+        # Read it back
+        response = client.get(f"/calculations/{calc_id}", params={"user_id": self.user_id})
+        assert response.status_code == 200
+        assert response.json()["result"] == 12.0
+
+    def test_read_calculation_not_found(self):
+        """Test reading non-existent calculation"""
+        response = client.get("/calculations/999", params={"user_id": self.user_id})
+        assert response.status_code == 404
+
+    def test_edit_calculation_success(self):
+        """Test updating a calculation"""
+        # Create calculation
+        post_response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "add", "operand_a": 2.0, "operand_b": 3.0}
+        )
+        calc_id = post_response.json()["id"]
+        
+        # Update it
+        response = client.put(
+            f"/calculations/{calc_id}",
+            params={"user_id": self.user_id},
+            json={"operation": "multiply", "operand_a": 4.0, "operand_b": 5.0}
+        )
+        assert response.status_code == 200
+        assert response.json()["result"] == 20.0
+
+    def test_edit_calculation_not_found(self):
+        """Test updating non-existent calculation"""
+        response = client.put(
+            "/calculations/999",
+            params={"user_id": self.user_id},
+            json={"operation": "add", "operand_a": 1.0, "operand_b": 1.0}
+        )
+        assert response.status_code == 404
+
+    def test_delete_calculation_success(self):
+        """Test deleting a calculation"""
+        # Create calculation
+        post_response = client.post(
+            "/calculations",
+            params={"user_id": self.user_id},
+            json={"operation": "add", "operand_a": 2.0, "operand_b": 3.0}
+        )
+        calc_id = post_response.json()["id"]
+        
+        # Delete it
+        response = client.delete(f"/calculations/{calc_id}", params={"user_id": self.user_id})
+        assert response.status_code == 204
+        
+        # Verify it's gone
+        get_response = client.get(f"/calculations/{calc_id}", params={"user_id": self.user_id})
+        assert get_response.status_code == 404
+
+    def test_delete_calculation_not_found(self):
+        """Test deleting non-existent calculation"""
+        response = client.delete("/calculations/999", params={"user_id": self.user_id})
+        assert response.status_code == 404
+
