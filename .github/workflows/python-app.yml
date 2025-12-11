@@ -2,9 +2,9 @@ name: Python application
 
 on:
   push:
-    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission ]
+    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission ]
   pull_request:
-    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission ]
+    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission ]
 
 jobs:
   build:
@@ -37,7 +37,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        playwright install
+        playwright install chromium
     
     - name: Run tests
       env:

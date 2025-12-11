@@ -1,14 +1,26 @@
 import logging
+from contextlib import asynccontextmanager
+from datetime import timedelta
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from contextlib import asynccontextmanager
 
 from app.operations import add, subtract, multiply, divide
 from app.database import get_db, init_db, User, Calculation
-from app.schemas import UserCreate, UserRead, UserLogin, CalculationCreate, CalculationRead
+from app.schemas import (
+    UserCreate,
+    UserRead,
+    UserLogin,
+    CalculationCreate,
+    CalculationRead,
+    AuthResponse,
+)
 from app.calculation_factory import CalculationFactory
-from app.security import hash_password, verify_password
+from app.security import hash_password, verify_password, create_access_token
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +45,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 # Root endpoint
 @app.get("/")
@@ -40,98 +55,99 @@ def root():
     return {"message": "FastAPI Calculator is running! Visit /docs for API documentation."}
 
 
-# ==================== USER ENDPOINTS ====================
+def _build_auth_response(db_user: User) -> AuthResponse:
+    """Create a JWT and wrap the user response."""
+    token = create_access_token({"sub": db_user.email, "user_id": db_user.id}, expires_delta=timedelta(hours=1))
+    return AuthResponse(
+        access_token=token,
+        token_type="bearer",
+        user=UserRead.model_validate(db_user),
+    )
 
-@app.post("/users/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    """
-    Register a new user with unique username and email.
-    Password is hashed before storing in database.
-    """
-    # Check if user already exists
+
+def _create_user_record(user: UserCreate, db: Session) -> User:
+    """Create a user record with hashed password, raising HTTPException on conflicts."""
     existing_user = db.query(User).filter(
         (User.username == user.username) | (User.email == user.email)
     ).first()
-    
+
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already registered"
+            detail="Username or email already registered",
         )
-    
+
     try:
-        # Hash the password
         hashed_password = hash_password(user.password)
-        
-        # Create new user
         db_user = User(
             username=user.username,
             email=user.email,
-            password_hash=hashed_password
+            password_hash=hashed_password,
         )
-        
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        
         logging.info(f"User registered successfully: {user.username}")
-        # Return a Pydantic model validated from the SQLAlchemy object
-        return UserRead.model_validate(db_user)
-        
+        return db_user
     except IntegrityError as e:
         db.rollback()
         logging.error(f"Database integrity error during registration: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already exists"
+            detail="Username or email already exists",
         )
-    except Exception as e:
+    except Exception as e:  # pragma: no cover - unexpected
         db.rollback()
         logging.error(f"Error registering user: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error creating user"
+            detail="Error creating user",
         )
+
+
+def _authenticate_user(credentials: UserLogin, db: Session) -> User:
+    db_user = db.query(User).filter(User.email == credentials.email).first()
+    if not db_user or not verify_password(credentials.password, db_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+    return db_user
+
+
+# ==================== USER ENDPOINTS ====================
+
+@app.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user and return a JWT."""
+    db_user = _create_user_record(user, db)
+    return _build_auth_response(db_user)
+
+
+@app.post("/users/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register_user(user: UserCreate, db: Session = Depends(get_db)):
+    """Backward-compatible registration route returning user info only."""
+    db_user = _create_user_record(user, db)
+    return UserRead.model_validate(db_user)
+
+
+@app.post("/login", response_model=AuthResponse)
+def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    """Authenticate and return JWT + user payload."""
+    db_user = _authenticate_user(credentials, db)
+    logging.info(f"User logged in successfully: {db_user.username}")
+    return _build_auth_response(db_user)
 
 
 @app.post("/users/login")
 def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
-    """
-    Login user with email and password.
-    Verifies password hash against stored hash.
-    """
-    try:
-        # Find user by email
-        db_user = db.query(User).filter(User.email == credentials.email).first()
-        
-        if not db_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-        
-        # Verify password
-        if not verify_password(credentials.password, db_user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-        
-        logging.info(f"User logged in successfully: {db_user.username}")
-        # Use Pydantic v2 model validation for SQLAlchemy object
-        return {
-            "message": "Login successful",
-            "user": UserRead.model_validate(db_user)
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error during login: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error during login"
-        )
+    """Backward-compatible login returning message + user."""
+    db_user = _authenticate_user(credentials, db)
+    logging.info(f"User logged in successfully: {db_user.username}")
+    return {
+        "message": "Login successful",
+        "user": UserRead.model_validate(db_user),
+    }
 
 
 @app.get("/users/{user_id}", response_model=UserRead)
@@ -147,6 +163,16 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     
     # Return as Pydantic model for consistent serialization
     return UserRead.model_validate(db_user)
+
+
+@app.get("/register.html", include_in_schema=False)
+def serve_register_page():
+    return FileResponse(STATIC_DIR / "register.html")
+
+
+@app.get("/login.html", include_in_schema=False)
+def serve_login_page():
+    return FileResponse(STATIC_DIR / "login.html")
 
 
 # ==================== CALCULATOR ENDPOINTS ====================

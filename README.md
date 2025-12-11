@@ -7,6 +7,7 @@ Production-ready FastAPI backend that progresses the Module 9–12 requirements 
 - **Module 10 – Secure Users:** `app/security.py` hashes and verifies passwords with bcrypt, `app/schemas.py` provides `UserCreate`/`UserRead`, and `app/database.py` wires SQLAlchemy models + Alembic-ready metadata. Unit and integration tests under `tests/` assert hashing, schema validation, and uniqueness. GitHub Actions runs the full suite and builds the Docker image.
 - **Module 11 – Calculation Domain:** `app/operations.py`, `app/calculation_factory.py`, and `app/calculator_memento.py` implement the optional factory pattern plus persistence-ready SQLAlchemy models + Pydantic schemas. Tests cover factory routing, validation, and DB commits.
 - **Module 12 – User & Calculation Routes:** `app/main.py` exposes `/users` (register/login) and `/calculations` (BREAD). Integration tests (`tests/test_*integration.py`, `tests/test_e2e.py`) cover registration, login, and full calculation CRUD.
+- **Module 13 – JWT + Front-End + Playwright:** `/register` and `/login` now issue JWTs, `app/static/register.html` and `app/static/login.html` provide client-side validation + token storage, and Playwright E2E covers positive/negative auth flows.
 
 ## Repository Layout
 - `app/` – FastAPI app, routers, models, factory logic, and security helpers.
@@ -15,6 +16,7 @@ Production-ready FastAPI backend that progresses the Module 9–12 requirements 
 - `Dockerfile` & `docker-compose.yml` – containers for local dev + parity with CI.
 - `requirements.txt` – locked versions for FastAPI, SQLAlchemy, Pydantic v2, psycopg, etc.
 - `wait_for_db_and_run.sh` – helper entrypoint for Docker to block until Postgres is ready.
+- `app/static/` – login & registration pages with client-side validation and JWT storage.
 
 ## Prerequisites
 - Docker + Docker Compose v2 (recommended path for Modules 9–12 verification).
@@ -47,7 +49,7 @@ uvicorn app.main:app --reload
 ## Testing Strategy
 - **Unit tests:** `pytest tests/test_operations.py tests/test_security.py ...`
 - **Integration tests:** `pytest tests/test_user_integration.py tests/test_calculation_integration.py`
-- **End-to-end:** `pytest tests/test_e2e.py`
+- **End-to-end (Playwright):** `pytest tests/test_e2e.py` (chromium installed via Dockerfile/CI)
 
 The CI workflow (see `.github/workflows/`) launches Postgres, runs every test target, and on success builds/pushes the Docker image so Docker Hub always mirrors the latest mainline commit (Module 10–12 deliverable).
 
@@ -55,6 +57,8 @@ The CI workflow (see `.github/workflows/`) launches Postgres, runs every test ta
 ## API Surface (excerpt)
 | Method | Path | Description |
 | ------ | ---- | ----------- |
+| POST | `/register` | Register user and return JWT |
+| POST | `/login` | Login and return JWT |
 | POST | `/users/register` | Create a user with `username`, `email`, `password` |
 | POST | `/users/login` | Validate credentials and return a session payload |
 | GET | `/calculations` | Browse calculations (optionally filter by user) |
@@ -71,3 +75,16 @@ The CI workflow (see `.github/workflows/`) launches Postgres, runs every test ta
 	docker build -t YOUR_DOCKERHUB_USERNAME/fastapi-calculator:local .
 	docker push YOUR_DOCKERHUB_USERNAME/fastapi-calculator:local
 	```
+
+## Front-End Pages (Module 13)
+- Registration page: http://localhost:8000/register.html (served from `/static/register.html`).
+- Login page: http://localhost:8000/login.html (served from `/static/login.html`).
+- Tokens are stored in `localStorage` (`access_token`) on success. Client-side validation checks email format and minimum password length before sending requests.
+
+## Running Playwright E2E
+Playwright chromium is installed in the Docker image and CI. If running locally:
+```bash
+playwright install chromium
+pytest tests/test_e2e.py -q
+```
+Ensure the database is available (`docker compose up -d`) before running tests; the test suite starts/stops `uvicorn` automatically.

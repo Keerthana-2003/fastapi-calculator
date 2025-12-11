@@ -9,4 +9,4 @@ app/database.py:27
     from crypt import crypt as _crypt
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-70 passed, 1 deselected, 2 warnings in 11.44s
+70 passed, 1 deselected, 2 warnings in 11.55s

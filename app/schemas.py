@@ -32,6 +32,13 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AuthResponse(BaseModel):
+    """JWT auth response containing user info and bearer token."""
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead
+
+
 class UserLogin(BaseModel):
     """Schema for user login"""
     email: EmailStr

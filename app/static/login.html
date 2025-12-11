@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login | FastAPI Calculator</title>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b1221; color: #f5f7ff; display: grid; place-items: center; height: 100vh; margin: 0; }
+    .card { width: min(360px, 92vw); background: linear-gradient(145deg, #121b31, #0f172a); border: 1px solid #1f2a44; border-radius: 16px; padding: 24px; box-shadow: 0 24px 64px rgba(0,0,0,0.35); }
+    h1 { margin: 0 0 16px; font-size: 24px; letter-spacing: 0.5px; }
+    label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #24304c; background: #0c1324; color: #f5f7ff; font-size: 14px; }
+    input:focus { outline: 2px solid #5b8def; border-color: #5b8def; }
+    button { width: 100%; margin-top: 16px; padding: 12px; border: none; border-radius: 10px; background: linear-gradient(120deg, #5b8def, #7bd6f6); color: #0b1221; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(91, 141, 239, 0.35); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status { margin-top: 14px; font-size: 14px; min-height: 20px; }
+    .status.ok { color: #8af6c8; }
+    .status.err { color: #ff9b9b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Welcome back</h1>
+    <form id="login-form">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required />
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required />
+
+      <button id="submit" type="submit">Login</button>
+      <div id="status" class="status"></div>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submit');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    function setStatus(message, ok = false) {
+      statusEl.textContent = message;
+      statusEl.className = ok ? 'status ok' : 'status err';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setStatus('');
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!emailRegex.test(email)) {
+        setStatus('Enter a valid email address', false);
+        return;
+      }
+      if (!password) {
+        setStatus('Password is required', false);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      try {
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStatus(data.detail || 'Invalid credentials', false);
+          return;
+        }
+        if (data.access_token) {
+          localStorage.setItem('access_token', data.access_token);
+        }
+        setStatus('Login successful! Token stored locally.', true);
+      } catch (err) {
+        setStatus('Network error, please try again.', false);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
