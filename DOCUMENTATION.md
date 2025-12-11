@@ -19,7 +19,7 @@ Module 11 adds targeted tests for the calculation model and factory:
 - Unit tests: `tests/test_operations.py`, `tests/test_schemas.py` validate operation logic and schema validation.
 - Integration tests: `tests/test_calculation_integration.py` inserts a `Calculation` record into an in-memory SQLite DB and verifies persistence and relationships.
 
-All tests (now 56 total) pass locally.
+All tests (now 58 total) pass locally.
 
 ### Docker Deployment
 Multi-container setup using Docker Compose:
@@ -30,10 +30,10 @@ Multi-container setup using Docker Compose:
 - All services automatically initialized on startup
 
 ### CI/CD Pipeline
-GitHub Actions workflow:
-- Runs on push/pull requests to main, docker-postgres-setup, and module-10-submission branches
+# GitHub Actions workflow:
+- Runs on push/pull requests to `main`, `docker-postgres-setup`, `module-10-submission`, and `module-11-submission` branches
 - PostgreSQL service container for testing
-- Executes all 54 tests
+- Executes all tests as part of CI (unit + integration; e2e excluded by default)
 - Builds and pushes Docker image to Docker Hub
 
 ## Architecture
