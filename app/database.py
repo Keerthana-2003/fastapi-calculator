@@ -2,7 +2,7 @@
 Database configuration and models for FastAPI Calculator
 """
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -51,9 +51,9 @@ class Calculation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     operation = Column(String(20), nullable=False)
-    operand_a = Column(Integer, nullable=False)
-    operand_b = Column(Integer, nullable=False)
-    result = Column(Integer, nullable=False)
+    operand_a = Column(Float, nullable=False)
+    operand_b = Column(Float, nullable=False)
+    result = Column(Float, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
