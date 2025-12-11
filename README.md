@@ -63,7 +63,22 @@ uvicorn app.main:app --reload
 pytest tests/ --ignore=tests/test_e2e.py -v
 ```
 
-Expected: 54 tests passing
+Expected: 56 tests passing (unit + integration; e2e excluded)
+
+## Module 11 (Calculation Model)
+
+- This repository includes a SQLAlchemy `Calculation` model and Pydantic schemas for validation.
+- A calculation factory (`app/calculation_factory.py`) maps operation names to implementations in `app/operations.py`.
+- Pydantic schemas are configured for v2 compatibility (use `model_validate` for SQLAlchemy objects).
+
+To run only Module 11-related tests (schemas and operations):
+
+```bash
+pytest tests/test_schemas.py tests/test_operations.py -q
+```
+
+Notes:
+- The project is prepared for the next modules — JWT/auth endpoints and full BREAD routes can be added without changing the data model.
 
 ## Database Models
 

@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional
 
@@ -28,8 +28,8 @@ class UserRead(BaseModel):
     email: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True  # SQLAlchemy compatibility
+    # Pydantic v2 compatible configuration for ORM / SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserLogin(BaseModel):
@@ -72,5 +72,5 @@ class CalculationRead(BaseModel):
     timestamp: datetime
     user_id: int
 
-    class Config:
-        from_attributes = True  # SQLAlchemy compatibility
+    # Pydantic v2 compatible configuration for ORM / SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)

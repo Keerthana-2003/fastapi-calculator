@@ -74,7 +74,8 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         db.refresh(db_user)
         
         logging.info(f"User registered successfully: {user.username}")
-        return db_user
+        # Return a Pydantic model validated from the SQLAlchemy object
+        return UserRead.model_validate(db_user)
         
     except IntegrityError as e:
         db.rollback()
@@ -116,9 +117,10 @@ def login_user(credentials: UserLogin, db: Session = Depends(get_db)):
             )
         
         logging.info(f"User logged in successfully: {db_user.username}")
+        # Use Pydantic v2 model validation for SQLAlchemy object
         return {
             "message": "Login successful",
-            "user": UserRead.from_orm(db_user)
+            "user": UserRead.model_validate(db_user)
         }
         
     except HTTPException:
@@ -142,7 +144,8 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
             detail="User not found"
         )
     
-    return db_user
+    # Return as Pydantic model for consistent serialization
+    return UserRead.model_validate(db_user)
 
 
 # ==================== CALCULATOR ENDPOINTS ====================
