@@ -1,43 +1,25 @@
-# FastAPI Calculator - Module 10 Implementation
+# FastAPI Calculator - Module 11 Implementation
 
 ## Overview
 
-This document describes the implementation of Module 10: Secure User Model with Pydantic Validation, Database Testing, and Docker Deployment.
+This document describes the implementation of Module 11: Calculation Model with Pydantic validation, factory pattern, and testing.
 
 ## Implementation Summary
 
-### User Authentication System
-Implemented a complete user management system with secure password handling:
-- User registration endpoint (POST /users/register) with validation
-- User login endpoint (POST /users/login) with password verification
-- User profile retrieval endpoint (GET /users/{id})
-- Passwords hashed using bcrypt with automatic salt generation
-- Duplicate username and email detection
-- Email format validation using email-validator
+### Focus for Module 11
+This module adds focused work on the Calculation data model, validation, and testing. Key points:
 
-### Database Layer
-Built SQLAlchemy ORM models for data persistence:
-- Users table with columns: id, username, email, password_hash, created_at
-- Unique constraints on username and email
-- Calculations table linked to users with cascade delete
-- Foreign key relationship between calculations and users
-- Database initialization on application startup
-
-### Input Validation
-Pydantic schemas for request/response validation:
-- UserCreate: username (3-50 characters, alphanumeric + underscore/dash), email, password (min 6 chars)
-- UserRead: user response without password_hash
-- UserLogin: email and password for authentication
-- CalculationCreate and CalculationRead for operation validation
+- Calculation Model: `app/database.py` already defines the `Calculation` SQLAlchemy model with fields `id`, `operation`, `operand_a`, `operand_b`, `result`, `timestamp`, and `user_id` (FK to `users.id`). Cascade delete is configured.
+- Pydantic Schemas: `app/schemas.py` contains `CalculationCreate` and `CalculationRead` with validation (allowed operation types and division-by-zero checks). Schemas now use Pydantic v2-compatible `model_config`.
+- Factory: `app/calculation_factory.py` maps operation strings to functions in `app/operations.py` and exposes `compute`.
 
 ### Testing
-54 comprehensive unit and integration tests covering:
-- Password hashing and verification (7 tests)
-- Pydantic schema validation (18 tests)
-- User registration, login, and retrieval (19 tests)
-- Calculator operations (10 tests)
+Module 11 adds targeted tests for the calculation model and factory:
 
-All tests pass locally and in CI/CD pipeline.
+- Unit tests: `tests/test_operations.py`, `tests/test_schemas.py` validate operation logic and schema validation.
+- Integration tests: `tests/test_calculation_integration.py` inserts a `Calculation` record into an in-memory SQLite DB and verifies persistence and relationships.
+
+All tests (now 56 total) pass locally.
 
 ### Docker Deployment
 Multi-container setup using Docker Compose:
@@ -94,41 +76,29 @@ requirements.txt      - Python dependencies
 - POST /multiply - Multiply two numbers
 - POST /divide - Divide two numbers
 
-## Testing Results
+### Testing Results
 
-![alt text](image.png)
-![alt text](image-6.png)
-
-All 54 tests passing:
-- test_security.py: 7 tests
-- test_schemas.py: 18 tests
-- test_user_integration.py: 19 tests
-- test_main.py: 10 tests
-
+All 56 tests passing locally (unit + integration; e2e excluded). The new integration tests validate DB persistence for `Calculation` records.
 ## Verification
 
-### Local Testing
-Run tests locally:
+### Cloud Codespace / Local Testing
+Run tests:
 ```
 pytest tests/ --ignore=tests/test_e2e.py -v
 ```
 
+To run only Module 11 tests:
+```
+pytest tests/test_schemas.py tests/test_operations.py tests/test_calculation_integration.py -q
+```
+
 ### Docker Compose
-Start all services:
+Start services if you want to test with Postgres instead of in-memory DBs:
 ```
 docker-compose up --build
 ```
 
 Access Swagger UI at http://localhost:8000/docs
-
-![alt text](image-1.png)
-
-### User Registration Test
-![alt text](image-2.png)
-
-### User Login Test
-![alt text](image-3.png)
-
 ## Deployment
 
 ### Docker Hub

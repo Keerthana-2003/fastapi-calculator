@@ -63,7 +63,7 @@ uvicorn app.main:app --reload
 pytest tests/ --ignore=tests/test_e2e.py -v
 ```
 
-Expected: 56 tests passing (unit + integration; e2e excluded)
+Expected: 58 tests passing (unit + integration; e2e excluded)
 
 ## Module 11 (Calculation Model)
 
