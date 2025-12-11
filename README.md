@@ -8,6 +8,7 @@ Production-ready FastAPI backend that progresses the Module 9–12 requirements 
 - **Module 11 – Calculation Domain:** `app/operations.py`, `app/calculation_factory.py`, and `app/calculator_memento.py` implement the optional factory pattern plus persistence-ready SQLAlchemy models + Pydantic schemas. Tests cover factory routing, validation, and DB commits.
 - **Module 12 – User & Calculation Routes:** `app/main.py` exposes `/users` (register/login) and `/calculations` (BREAD). Integration tests (`tests/test_*integration.py`, `tests/test_e2e.py`) cover registration, login, and full calculation CRUD.
 - **Module 13 – JWT + Front-End + Playwright:** `/register` and `/login` now issue JWTs, `app/static/register.html` and `app/static/login.html` provide client-side validation + token storage, and Playwright E2E covers positive/negative auth flows.
+- **Module 14 – Auth’d Calculations + UI:** Calculation BREAD endpoints enforce JWT (still accept `user_id` for backward compatibility), partial updates are supported, and `app/static/calculations.html` provides a JWT-backed UI for create/browse/update/delete. Playwright now covers calc happy/negative paths.
 
 ## Repository Layout
 - `app/` – FastAPI app, routers, models, factory logic, and security helpers.
@@ -16,7 +17,7 @@ Production-ready FastAPI backend that progresses the Module 9–12 requirements 
 - `Dockerfile` & `docker-compose.yml` – containers for local dev + parity with CI.
 - `requirements.txt` – locked versions for FastAPI, SQLAlchemy, Pydantic v2, psycopg, etc.
 - `wait_for_db_and_run.sh` – helper entrypoint for Docker to block until Postgres is ready.
-- `app/static/` – login & registration pages with client-side validation and JWT storage.
+- `app/static/` – login, registration, and calculations pages with client-side validation and JWT storage.
 
 ## Prerequisites
 - Docker + Docker Compose v2 (recommended path for Modules 9–12 verification).
@@ -76,9 +77,10 @@ The CI workflow (see `.github/workflows/`) launches Postgres, runs every test ta
 	docker push YOUR_DOCKERHUB_USERNAME/fastapi-calculator:local
 	```
 
-## Front-End Pages (Module 13)
+## Front-End Pages (Modules 13–14)
 - Registration page: http://localhost:8000/register.html (served from `/static/register.html`).
 - Login page: http://localhost:8000/login.html (served from `/static/login.html`).
+- Calculations page: http://localhost:8000/calculations.html (served from `/static/calculations.html`), uses the JWT in `localStorage.access_token` to perform create/browse/update/delete.
 - Tokens are stored in `localStorage` (`access_token`) on success. Client-side validation checks email format and minimum password length before sending requests.
 
 ## Running Playwright E2E
@@ -88,3 +90,8 @@ playwright install chromium
 pytest tests/test_e2e.py -q
 ```
 Ensure the database is available (`docker compose up -d`) before running tests; the test suite starts/stops `uvicorn` automatically.
+
+### Module 14 Smoke Checklist
+- Start services: `docker compose up --build` (or run locally with `uvicorn app.main:app --reload`).
+- Open http://localhost:8000/calculations.html, login first (token saved in `localStorage`), then create/update/delete calculations.
+- Run full suite: `pytest -q` (requires `python -m playwright install chromium` on fresh hosts).

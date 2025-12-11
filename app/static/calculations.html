@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calculations | FastAPI Calculator</title>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0b1221; color: #f5f7ff; margin: 0; padding: 24px; }
+    h1, h2 { margin: 0 0 12px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background: linear-gradient(145deg, #121b31, #0f172a); border: 1px solid #1f2a44; border-radius: 14px; padding: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.35); }
+    label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 14px; }
+    input, select { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #24304c; background: #0c1324; color: #f5f7ff; font-size: 14px; }
+    input:focus, select:focus { outline: 2px solid #5b8def; border-color: #5b8def; }
+    button { margin-top: 12px; padding: 10px 12px; border: none; border-radius: 10px; background: linear-gradient(120deg, #5b8def, #7bd6f6); color: #0b1221; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(91, 141, 239, 0.35); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #calc-list { display: grid; gap: 10px; margin-top: 8px; }
+    .item { padding: 10px; border: 1px solid #24304c; border-radius: 10px; background: #0c1324; }
+    .status { min-height: 18px; font-size: 14px; margin-top: 8px; }
+    .ok { color: #8af6c8; }
+    .err { color: #ff9b9b; }
+    .banner { margin-bottom: 16px; padding: 12px; border-radius: 10px; background: #10203d; border: 1px solid #203963; }
+    a { color: #7bd6f6; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>Auth required.</strong> This page uses the JWT stored in <code>localStorage.access_token</code>. If empty, login at <a href="/login.html">/login.html</a> first.
+  </div>
+  <h1>Calculations (BREAD)</h1>
+  <div id="status" class="status"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Add</h2>
+      <label for="op">Operation</label>
+      <select id="op">
+        <option value="add">add</option>
+        <option value="subtract">subtract</option>
+        <option value="multiply">multiply</option>
+        <option value="divide">divide</option>
+      </select>
+      <label for="a">Operand A</label>
+      <input id="a" type="number" step="any" />
+      <label for="b">Operand B</label>
+      <input id="b" type="number" step="any" />
+      <button id="create-btn" type="button">Create</button>
+    </div>
+
+    <div class="card">
+      <h2>Edit</h2>
+      <label for="edit-id">Calculation ID</label>
+      <input id="edit-id" type="number" />
+      <label for="edit-op">Operation</label>
+      <select id="edit-op">
+        <option value="">(leave unchanged)</option>
+        <option value="add">add</option>
+        <option value="subtract">subtract</option>
+        <option value="multiply">multiply</option>
+        <option value="divide">divide</option>
+      </select>
+      <label for="edit-a">Operand A</label>
+      <input id="edit-a" type="number" step="any" placeholder="(leave blank to keep)" />
+      <label for="edit-b">Operand B</label>
+      <input id="edit-b" type="number" step="any" placeholder="(leave blank to keep)" />
+      <button id="update-btn" type="button">Update</button>
+    </div>
+
+    <div class="card">
+      <h2>Delete</h2>
+      <label for="delete-id">Calculation ID</label>
+      <input id="delete-id" type="number" />
+      <button id="delete-btn" type="button">Delete</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <h2 style="margin:0;">Browse</h2>
+      <button id="refresh-btn" type="button">Refresh</button>
+    </div>
+    <div id="calc-list"></div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const calcList = document.getElementById('calc-list');
+    const ops = ['add', 'subtract', 'multiply', 'divide'];
+
+    function token() {
+      return localStorage.getItem('access_token') || '';
+    }
+
+    function setStatus(msg, ok = false) {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${ok ? 'ok' : 'err'}`;
+    }
+
+    function headers() {
+      const t = token();
+      if (!t) throw new Error('Missing token. Login first.');
+      return { 'Content-Type': 'application/json', 'accept': 'application/json', 'Authorization': `Bearer ${t}` };
+    }
+
+    function validateOperation(op) {
+      if (!ops.includes(op)) throw new Error('Operation must be add/subtract/multiply/divide');
+    }
+
+    async function createCalc() {
+      try {
+        const op = document.getElementById('op').value;
+        const a = parseFloat(document.getElementById('a').value);
+        const b = parseFloat(document.getElementById('b').value);
+        validateOperation(op);
+        if (Number.isNaN(a) || Number.isNaN(b)) throw new Error('Operands must be numbers');
+        const res = await fetch('/calculations', {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ operation: op, operand_a: a, operand_b: b })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Create failed');
+        setStatus(`Created calculation #${data.id}: ${data.result}`, true);
+        await loadCalcs();
+      } catch (err) {
+        setStatus(err.message || 'Create failed', false);
+      }
+    }
+
+    async function loadCalcs() {
+      try {
+        const res = await fetch('/calculations', { headers: headers() });
+        const data = await res.json().catch(() => []);
+        if (!res.ok) throw new Error(data.detail || 'Browse failed');
+        calcList.innerHTML = data.map(c => `<div class="item">ID ${c.id}: ${c.operation}(${c.operand_a}, ${c.operand_b}) = ${c.result}</div>`).join('') || '<div class="item">No calculations yet.</div>';
+        setStatus('Loaded calculations', true);
+      } catch (err) {
+        calcList.innerHTML = '';
+        setStatus(err.message || 'Browse failed', false);
+      }
+    }
+
+    async function updateCalc() {
+      try {
+        const id = parseInt(document.getElementById('edit-id').value, 10);
+        if (!id) throw new Error('ID is required');
+        const op = document.getElementById('edit-op').value;
+        const aRaw = document.getElementById('edit-a').value;
+        const bRaw = document.getElementById('edit-b').value;
+        const payload = {};
+        if (op) { validateOperation(op); payload.operation = op; }
+        if (aRaw !== '') payload.operand_a = parseFloat(aRaw);
+        if (bRaw !== '') payload.operand_b = parseFloat(bRaw);
+        if (payload.operand_a !== undefined && Number.isNaN(payload.operand_a)) throw new Error('Operand A must be a number');
+        if (payload.operand_b !== undefined && Number.isNaN(payload.operand_b)) throw new Error('Operand B must be a number');
+        if (Object.keys(payload).length === 0) throw new Error('Provide at least one field to update');
+
+        const res = await fetch(`/calculations/${id}`, {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Update failed');
+        setStatus(`Updated #${data.id}: ${data.operation} = ${data.result}`, true);
+        await loadCalcs();
+      } catch (err) {
+        setStatus(err.message || 'Update failed', false);
+      }
+    }
+
+    async function deleteCalc() {
+      try {
+        const id = parseInt(document.getElementById('delete-id').value, 10);
+        if (!id) throw new Error('ID is required');
+        const res = await fetch(`/calculations/${id}`, { method: 'DELETE', headers: headers() });
+        if (!res.ok && res.status !== 204) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.detail || 'Delete failed');
+        }
+        setStatus(`Deleted calculation #${id}`, true);
+        await loadCalcs();
+      } catch (err) {
+        setStatus(err.message || 'Delete failed', false);
+      }
+    }
+
+    document.getElementById('create-btn').addEventListener('click', createCalc);
+    document.getElementById('refresh-btn').addEventListener('click', loadCalcs);
+    document.getElementById('update-btn').addEventListener('click', updateCalc);
+    document.getElementById('delete-btn').addEventListener('click', deleteCalc);
+
+    // Initial state
+    if (!token()) {
+      setStatus('Missing token. Please login first.', false);
+    } else {
+      loadCalcs();
+    }
+  </script>
+</body>
+</html>

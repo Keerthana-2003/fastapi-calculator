@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -18,9 +19,10 @@ from app.schemas import (
     CalculationCreate,
     CalculationRead,
     AuthResponse,
+    CalculationUpdate,
 )
 from app.calculation_factory import CalculationFactory
-from app.security import hash_password, verify_password, create_access_token
+from app.security import hash_password, verify_password, create_access_token, decode_access_token
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -48,11 +50,35 @@ app = FastAPI(
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+bearer_scheme = HTTPBearer(auto_error=False)
+
 
 # Root endpoint
 @app.get("/")
 def root():
     return {"message": "FastAPI Calculator is running! Visit /docs for API documentation."}
+
+
+def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | None:
+    """Resolve current user from JWT if provided; return None when absent."""
+    if not credentials:
+        return None
+    token = credentials.credentials
+    try:
+        payload = decode_access_token(token)
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise ValueError("Missing user id in token")
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
 
 
 def _build_auth_response(db_user: User) -> AuthResponse:
@@ -175,6 +201,11 @@ def serve_login_page():
     return FileResponse(STATIC_DIR / "login.html")
 
 
+@app.get("/calculations.html", include_in_schema=False)
+def serve_calculations_page():
+    return FileResponse(STATIC_DIR / "calculations.html")
+
+
 # ==================== CALCULATOR ENDPOINTS ====================
 
 # Add endpoint
@@ -216,14 +247,23 @@ def api_divide(a: float, b: float):
 # ==================== CALCULATION ENDPOINTS (BREAD) ====================
 
 @app.post("/calculations", response_model=CalculationRead, status_code=status.HTTP_201_CREATED)
-def add_calculation(calc: CalculationCreate, user_id: int, db: Session = Depends(get_db)):
+def add_calculation(
+    calc: CalculationCreate,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Create a new calculation record.
     Computes result using CalculationFactory and stores in database.
     """
     try:
-        # Verify user exists
-        user = db.query(User).filter(User.id == user_id).first()
+        target_user_id = user_id or (current_user.id if current_user else None)
+        if not target_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
+
+        # Verify user exists (for backward compatibility when user_id is passed)
+        user = db.query(User).filter(User.id == target_user_id).first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -239,7 +279,7 @@ def add_calculation(calc: CalculationCreate, user_id: int, db: Session = Depends
             operand_a=calc.operand_a,
             operand_b=calc.operand_b,
             result=result,
-            user_id=user_id
+            user_id=target_user_id,
         )
         
         db.add(db_calc)
@@ -267,30 +307,46 @@ def add_calculation(calc: CalculationCreate, user_id: int, db: Session = Depends
 
 
 @app.get("/calculations", response_model=list[CalculationRead])
-def browse_calculations(user_id: int, db: Session = Depends(get_db)):
+def browse_calculations(
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Browse all calculations for a user.
     """
-    # Verify user exists
-    user = db.query(User).filter(User.id == user_id).first()
+    target_user_id = user_id or (current_user.id if current_user else None)
+    if not target_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
+
+    user = db.query(User).filter(User.id == target_user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
     
-    calculations = db.query(Calculation).filter(Calculation.user_id == user_id).all()
+    calculations = db.query(Calculation).filter(Calculation.user_id == target_user_id).all()
     return [CalculationRead.model_validate(c) for c in calculations]
 
 
 @app.get("/calculations/{calc_id}", response_model=CalculationRead)
-def read_calculation(calc_id: int, user_id: int, db: Session = Depends(get_db)):
+def read_calculation(
+    calc_id: int,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Read a specific calculation by ID.
     Verifies the calculation belongs to the user.
     """
+    target_user_id = user_id or (current_user.id if current_user else None)
+    if not target_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
+
     calc = db.query(Calculation).filter(
-        (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+        (Calculation.id == calc_id) & (Calculation.user_id == target_user_id)
     ).first()
     
     if not calc:
@@ -303,14 +359,24 @@ def read_calculation(calc_id: int, user_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/calculations/{calc_id}", response_model=CalculationRead)
-def edit_calculation(calc_id: int, calc_update: CalculationCreate, user_id: int, db: Session = Depends(get_db)):
+def edit_calculation(
+    calc_id: int,
+    calc_update: CalculationUpdate,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Update an existing calculation.
     Recomputes result based on new operands/operation.
     """
     try:
+        target_user_id = user_id or (current_user.id if current_user else None)
+        if not target_user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
+
         calc = db.query(Calculation).filter(
-            (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+            (Calculation.id == calc_id) & (Calculation.user_id == target_user_id)
         ).first()
         
         if not calc:
@@ -319,13 +385,18 @@ def edit_calculation(calc_id: int, calc_update: CalculationCreate, user_id: int,
                 detail="Calculation not found"
             )
         
+        # Use existing values when fields are omitted
+        new_operation = calc_update.operation or calc.operation
+        new_a = calc_update.operand_a if calc_update.operand_a is not None else calc.operand_a
+        new_b = calc_update.operand_b if calc_update.operand_b is not None else calc.operand_b
+
         # Compute new result
-        result = CalculationFactory.compute(calc_update.operation, calc_update.operand_a, calc_update.operand_b)
+        result = CalculationFactory.compute(new_operation, new_a, new_b)
         
         # Update fields
-        calc.operation = calc_update.operation
-        calc.operand_a = calc_update.operand_a
-        calc.operand_b = calc_update.operand_b
+        calc.operation = new_operation
+        calc.operand_a = new_a
+        calc.operand_b = new_b
         calc.result = result
         
         db.commit()
@@ -352,13 +423,22 @@ def edit_calculation(calc_id: int, calc_update: CalculationCreate, user_id: int,
 
 
 @app.delete("/calculations/{calc_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_calculation(calc_id: int, user_id: int, db: Session = Depends(get_db)):
+def delete_calculation(
+    calc_id: int,
+    user_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+):
     """
     Delete a calculation by ID.
     Verifies the calculation belongs to the user.
     """
+    target_user_id = user_id or (current_user.id if current_user else None)
+    if not target_user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
+
     calc = db.query(Calculation).filter(
-        (Calculation.id == calc_id) & (Calculation.user_id == user_id)
+        (Calculation.id == calc_id) & (Calculation.user_id == target_user_id)
     ).first()
     
     if not calc:

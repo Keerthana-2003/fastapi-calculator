@@ -69,6 +69,33 @@ class CalculationCreate(BaseModel):
         return v
 
 
+class CalculationUpdate(BaseModel):
+    """Schema for updating an existing calculation."""
+    operation: Optional[str] = Field(None, description="Operation type: add, subtract, multiply, divide")
+    operand_a: Optional[float] = Field(None, description="First operand")
+    operand_b: Optional[float] = Field(None, description="Second operand")
+
+    @field_validator("operation")
+    @classmethod
+    def validate_operation(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed_operations = ["add", "subtract", "multiply", "divide"]
+        if v.lower() not in allowed_operations:
+            raise ValueError(f"Operation must be one of {allowed_operations}")
+        return v.lower()
+
+    @field_validator("operand_b")
+    @classmethod
+    def validate_divisor(cls, v: Optional[float], info) -> Optional[float]:
+        if v is None:
+            return v
+        op = info.data.get("operation")
+        if op and op.lower() == "divide" and v == 0:
+            raise ValueError("Cannot divide by zero")
+        return v
+
+
 class CalculationRead(BaseModel):
     """Schema for returning calculation details"""
     id: int

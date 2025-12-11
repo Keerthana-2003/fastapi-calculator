@@ -10,6 +10,7 @@ from playwright.sync_api import sync_playwright
 API_BASE = "http://127.0.0.1:8000"
 REGISTER_PAGE = f"{API_BASE}/register.html"
 LOGIN_PAGE = f"{API_BASE}/login.html"
+CALC_PAGE = f"{API_BASE}/calculations.html"
 
 
 @pytest.fixture(scope="session")
@@ -23,6 +24,8 @@ def server():
         pass
 
     proc = subprocess.Popen([
+        "python",
+        "-m",
         "uvicorn",
         "app.main:app",
         "--host",
@@ -66,6 +69,18 @@ def _api_register(email: str, password: str, username: str | None = None):
     }
     resp = requests.post(f"{API_BASE}/register", json=payload, timeout=5)
     assert resp.status_code in (200, 201)
+    return resp.json()
+
+
+def _api_create_calc(token: str, operation: str = "add", a: float = 2.0, b: float = 3.0):
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    resp = requests.post(
+        f"{API_BASE}/calculations",
+        json={"operation": operation, "operand_a": a, "operand_b": b},
+        headers=headers,
+        timeout=5,
+    )
+    assert resp.status_code == 201
     return resp.json()
 
 
@@ -135,3 +150,88 @@ def test_login_wrong_password(server, browser):
     page.wait_for_timeout(500)
     status_text = page.text_content("#status") or ""
     assert "Invalid" in status_text
+
+
+def test_calculations_create_and_browse(server, browser):
+    # Register and get token via API for speed
+    email = _unique_email()
+    password = "calcpass123"
+    reg = _api_register(email=email, password=password)
+    token = reg["access_token"]
+
+    page = browser.new_page()
+    page.goto(CALC_PAGE)
+    page.evaluate("(t) => localStorage.setItem('access_token', t)", token)
+
+    page.select_option("#op", "add")
+    page.fill("#a", "4")
+    page.fill("#b", "5")
+    page.click("#create-btn")
+    page.wait_for_timeout(600)
+
+    status_text = page.text_content("#status") or ""
+    assert ("Created calculation" in status_text) or ("Loaded calculations" in status_text)
+    list_text = page.text_content("#calc-list") or ""
+    assert "add(4" in list_text
+
+
+def test_calculations_update_and_delete(server, browser):
+    email = _unique_email()
+    password = "calcpass456"
+    reg = _api_register(email=email, password=password)
+    token = reg["access_token"]
+
+    created = _api_create_calc(token, operation="subtract", a=10, b=4)
+    calc_id = created["id"]
+
+    page = browser.new_page()
+    page.goto(CALC_PAGE)
+    page.evaluate("(t) => localStorage.setItem('access_token', t)", token)
+
+    page.fill("#edit-id", str(calc_id))
+    page.select_option("#edit-op", "multiply")
+    page.fill("#edit-a", "3")
+    page.fill("#edit-b", "3")
+    page.click("#update-btn")
+    page.wait_for_timeout(600)
+    status_text = page.text_content("#status") or ""
+    assert ("Updated" in status_text) or ("Loaded calculations" in status_text)
+    list_text = page.text_content("#calc-list") or ""
+    assert "multiply(3" in list_text
+
+    page.fill("#delete-id", str(calc_id))
+    page.click("#delete-btn")
+    page.wait_for_timeout(400)
+    status_text = page.text_content("#status") or ""
+    assert ("Deleted" in status_text) or ("Loaded calculations" in status_text)
+    list_text = page.text_content("#calc-list") or ""
+    assert f"ID {calc_id}" not in list_text
+
+
+def test_calculations_missing_token_negative(server, browser):
+    page = browser.new_page()
+    page.goto(CALC_PAGE)
+    page.evaluate("() => localStorage.removeItem('access_token')")
+    page.click("#refresh-btn")
+    page.wait_for_timeout(300)
+    status_text = page.text_content("#status") or ""
+    assert "Missing token" in status_text
+
+
+def test_calculations_invalid_operand_negative(server, browser):
+    email = _unique_email()
+    password = "calcpass789"
+    reg = _api_register(email=email, password=password)
+    token = reg["access_token"]
+
+    page = browser.new_page()
+    page.goto(CALC_PAGE)
+    page.evaluate("(t) => localStorage.setItem('access_token', t)", token)
+
+    page.select_option("#op", "add")
+    page.evaluate("() => { document.getElementById('a').value = 'abc'; }")
+    page.fill("#b", "5")
+    page.click("#create-btn")
+    page.wait_for_timeout(400)
+    status_text = page.text_content("#status") or ""
+    assert "Operands" in status_text
