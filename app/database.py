@@ -3,9 +3,8 @@ Database configuration and models for FastAPI Calculator
 """
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Float
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -36,7 +35,7 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationship to calculations
     calculations = relationship("Calculation", back_populates="user", cascade="all, delete-orphan")
@@ -54,7 +53,7 @@ class Calculation(Base):
     operand_a = Column(Float, nullable=False)
     operand_b = Column(Float, nullable=False)
     result = Column(Float, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # Relationship to user

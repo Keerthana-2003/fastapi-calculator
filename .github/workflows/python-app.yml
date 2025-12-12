@@ -2,9 +2,9 @@ name: Python application
 
 on:
   push:
-    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission, module-14-submission ]
+    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission, module-14-submission, final-project ]
   pull_request:
-    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission, module-14-submission ]
+    branches: [ main, docker-postgres-setup, module-10-submission, module-11-submission, module-12-submission, module-13-submission, module-14-submission, final-project ]
 
 jobs:
   build:

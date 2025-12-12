@@ -45,6 +45,42 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    """Schema for updating user profile"""
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[EmailStr] = None
+
+    @field_validator("username")
+    @classmethod
+    def username_alphanumeric(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if not all(c.isalnum() or c in ['_', '-'] for c in v):
+            raise ValueError('Username must be alphanumeric (underscores and hyphens allowed)')
+        return v
+
+
+class PasswordChange(BaseModel):
+    """Schema for changing user password"""
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
+    confirm_new_password: str = Field(..., min_length=6)
+
+    @field_validator("confirm_new_password")
+    @classmethod
+    def passwords_match(cls, v: str, info) -> str:
+        if "new_password" in info.data and v != info.data["new_password"]:
+            raise ValueError("New passwords do not match")
+        return v
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_differs(cls, v: str, info) -> str:
+        if "current_password" in info.data and v == info.data["current_password"]:
+            raise ValueError("New password must differ from current password")
+        return v
+
+
 class CalculationCreate(BaseModel):
     """Schema for creating a new calculation"""
     operation: str = Field(..., description="Operation type: add, subtract, multiply, divide")

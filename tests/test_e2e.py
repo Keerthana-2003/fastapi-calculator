@@ -11,6 +11,7 @@ API_BASE = "http://127.0.0.1:8000"
 REGISTER_PAGE = f"{API_BASE}/register.html"
 LOGIN_PAGE = f"{API_BASE}/login.html"
 CALC_PAGE = f"{API_BASE}/calculations.html"
+PROFILE_PAGE = f"{API_BASE}/profile.html"
 
 
 @pytest.fixture(scope="session")
@@ -70,6 +71,14 @@ def _api_register(email: str, password: str, username: str | None = None):
     resp = requests.post(f"{API_BASE}/register", json=payload, timeout=5)
     assert resp.status_code in (200, 201)
     return resp.json()
+
+
+def _api_login(email: str, password: str):
+    return requests.post(
+        f"{API_BASE}/login",
+        json={"email": email, "password": password},
+        timeout=5,
+    )
 
 
 def _api_create_calc(token: str, operation: str = "add", a: float = 2.0, b: float = 3.0):
@@ -235,3 +244,39 @@ def test_calculations_invalid_operand_negative(server, browser):
     page.wait_for_timeout(400)
     status_text = page.text_content("#status") or ""
     assert "Operands" in status_text
+
+
+def test_profile_update_and_password_change(server, browser):
+    email = _unique_email()
+    password = "origpass12"
+    reg = _api_register(email=email, password=password)
+    token = reg["access_token"]
+
+    new_email = _unique_email()
+    new_username = f"u_{uuid.uuid4().hex[:5]}"
+    new_password = "newpass34"
+
+    page = browser.new_page()
+    page.goto(PROFILE_PAGE)
+    page.evaluate("(t) => localStorage.setItem('access_token', t)", token)
+    page.reload()
+
+    page.fill("#username", new_username)
+    page.fill("#email", new_email)
+    page.click("#update-btn")
+    page.wait_for_timeout(700)
+    status_text = page.text_content("#status") or ""
+    assert "Profile updated" in status_text
+
+    page.fill("#current-password", password)
+    page.fill("#new-password", new_password)
+    page.fill("#confirm-password", new_password)
+    page.click("#password-btn")
+    page.wait_for_timeout(700)
+    status_text = page.text_content("#status") or ""
+    assert "Password updated" in status_text
+
+    old_login = _api_login(new_email, password)
+    assert old_login.status_code == 401
+    new_login = _api_login(new_email, new_password)
+    assert new_login.status_code in (200, 201)

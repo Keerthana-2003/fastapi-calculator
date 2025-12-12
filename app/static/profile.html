@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile | FastAPI Calculator</title>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: radial-gradient(circle at 20% 20%, #13203f, #0a1224 45%), #0a1224; color: #f6f8ff; margin: 0; padding: 24px; }
+    h1, h2 { margin: 0 0 12px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+    .card { background: linear-gradient(150deg, #101a32, #0d1629); border: 1px solid #1f2c48; border-radius: 14px; padding: 16px; box-shadow: 0 16px 40px rgba(0,0,0,0.35); }
+    label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 14px; }
+    input { width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #24304c; background: #0c1324; color: #f5f7ff; font-size: 14px; }
+    input:focus { outline: 2px solid #5b8def; border-color: #5b8def; }
+    button { margin-top: 12px; padding: 10px 12px; border: none; border-radius: 10px; background: linear-gradient(120deg, #5b8def, #7bd6f6); color: #0b1221; font-weight: 700; cursor: pointer; box-shadow: 0 10px 30px rgba(91, 141, 239, 0.35); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status { min-height: 18px; font-size: 14px; margin-top: 8px; }
+    .ok { color: #8af6c8; }
+    .err { color: #ff9b9b; }
+    .meta { display: grid; gap: 6px; margin-top: 6px; font-size: 14px; color: #cfd8f8; }
+    .banner { margin-bottom: 16px; padding: 12px; border-radius: 10px; background: #10203d; border: 1px solid #203963; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    a { color: #7bd6f6; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <div><strong>Profile</strong> uses the JWT stored in localStorage. Login at <a href="/login.html">/login.html</a> if needed.</div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <a href="/calculations.html">Calculations</a>
+      <button type="button" id="logout-btn">Logout</button>
+    </div>
+  </div>
+
+  <h1>Your Profile</h1>
+  <div id="status" class="status"></div>
+  <div id="user-meta" class="meta"></div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Update Details</h2>
+      <p style="margin:0 0 10px; color:#cfd8f8; font-size:14px;">Change your username and/or email. Leave a field blank to keep it unchanged.</p>
+      <label for="username">Username</label>
+      <input id="username" type="text" placeholder="New username" />
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="new@email.com" />
+      <button id="update-btn" type="button">Save changes</button>
+    </div>
+
+    <div class="card">
+      <h2>Change Password</h2>
+      <p style="margin:0 0 10px; color:#cfd8f8; font-size:14px;">Set a new password. Minimum 6 characters.</p>
+      <label for="current-password">Current password</label>
+      <input id="current-password" type="password" />
+      <label for="new-password">New password</label>
+      <input id="new-password" type="password" />
+      <label for="confirm-password">Confirm new password</label>
+      <input id="confirm-password" type="password" />
+      <button id="password-btn" type="button">Update password</button>
+    </div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const metaEl = document.getElementById('user-meta');
+
+    function token() {
+      return localStorage.getItem('access_token') || '';
+    }
+
+    function headers() {
+      const t = token();
+      if (!t) throw new Error('Missing token. Login first.');
+      return { 'Content-Type': 'application/json', 'accept': 'application/json', 'Authorization': `Bearer ${t}` };
+    }
+
+    function setStatus(msg, ok = false) {
+      statusEl.textContent = msg;
+      statusEl.className = `status ${ok ? 'ok' : 'err'}`;
+    }
+
+    function renderUser(user) {
+      metaEl.innerHTML = user ? [
+        `Username: ${user.username}`,
+        `Email: ${user.email}`,
+        `User ID: ${user.id}`,
+        `Created: ${new Date(user.created_at).toLocaleString()}`,
+      ].map(line => `<div>${line}</div>`).join('') : '';
+    }
+
+    async function loadProfile() {
+      try {
+        const res = await fetch('/me', { headers: headers() });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Failed to load profile');
+        renderUser(data);
+        setStatus('Profile loaded', true);
+      } catch (err) {
+        renderUser(null);
+        setStatus(err.message || 'Failed to load profile');
+      }
+    }
+
+    async function updateProfile() {
+      try {
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const payload = {};
+        if (username) payload.username = username;
+        if (email) payload.email = email;
+        if (!payload.username && !payload.email) throw new Error('Provide a username or email to update');
+
+        const res = await fetch('/me', {
+          method: 'PUT',
+          headers: headers(),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Update failed');
+        if (data.access_token) localStorage.setItem('access_token', data.access_token);
+        renderUser(data.user);
+        setStatus('Profile updated', true);
+      } catch (err) {
+        setStatus(err.message || 'Update failed');
+      }
+    }
+
+    async function changePassword() {
+      try {
+        const current = document.getElementById('current-password').value;
+        const next = document.getElementById('new-password').value;
+        const confirm = document.getElementById('confirm-password').value;
+
+        if (!current || !next || !confirm) throw new Error('Fill out all password fields');
+        if (next.length < 6) throw new Error('New password must be at least 6 characters');
+        if (next !== confirm) throw new Error('New passwords do not match');
+        if (next === current) throw new Error('New password must differ from current password');
+
+        const res = await fetch('/me/password', {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ current_password: current, new_password: next, confirm_new_password: confirm }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'Password update failed');
+        if (data.access_token) localStorage.setItem('access_token', data.access_token);
+        document.getElementById('current-password').value = '';
+        document.getElementById('new-password').value = '';
+        document.getElementById('confirm-password').value = '';
+        renderUser(data.user);
+        setStatus('Password updated', true);
+      } catch (err) {
+        setStatus(err.message || 'Password update failed');
+      }
+    }
+
+    document.getElementById('update-btn').addEventListener('click', updateProfile);
+    document.getElementById('password-btn').addEventListener('click', changePassword);
+    document.getElementById('logout-btn').addEventListener('click', () => {
+      localStorage.removeItem('access_token');
+      setStatus('Logged out');
+      renderUser(null);
+    });
+
+    if (!token()) {
+      setStatus('Missing token. Please login first.');
+    } else {
+      loadProfile();
+    }
+  </script>
+</body>
+</html>

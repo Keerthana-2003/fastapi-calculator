@@ -16,6 +16,8 @@ from app.schemas import (
     UserCreate,
     UserRead,
     UserLogin,
+    UserUpdate,
+    PasswordChange,
     CalculationCreate,
     CalculationRead,
     AuthResponse,
@@ -78,6 +80,17 @@ def get_current_user_optional(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    """Resolve the current authenticated user or raise when missing/invalid."""
+    user = get_current_user_optional(credentials, db)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not authorized")
     return user
 
 
@@ -204,6 +217,72 @@ def serve_login_page():
 @app.get("/calculations.html", include_in_schema=False)
 def serve_calculations_page():
     return FileResponse(STATIC_DIR / "calculations.html")
+
+
+@app.get("/profile.html", include_in_schema=False)
+def serve_profile_page():
+    return FileResponse(STATIC_DIR / "profile.html")
+
+
+@app.get("/me", response_model=UserRead)
+def read_current_user(current_user: User = Depends(get_current_user)):
+    """Return the current authenticated user."""
+    return UserRead.model_validate(current_user)
+
+
+@app.put("/me", response_model=AuthResponse)
+def update_current_user(
+    update: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update username/email for the current user and return a fresh JWT."""
+    if update.username is None and update.email is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided")
+
+    try:
+        if update.username and update.username != current_user.username:
+            existing_username = db.query(User).filter(
+                (User.username == update.username) & (User.id != current_user.id)
+            ).first()
+            if existing_username:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+            current_user.username = update.username
+
+        if update.email and update.email != current_user.email:
+            existing_email = db.query(User).filter(
+                (User.email == update.email) & (User.id != current_user.id)
+            ).first()
+            if existing_email:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already taken")
+            current_user.email = update.email
+
+        db.commit()
+        db.refresh(current_user)
+        return _build_auth_response(current_user)
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive
+        db.rollback()
+        logging.error(f"Error updating profile: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error updating profile")
+
+
+@app.post("/me/password", response_model=AuthResponse)
+def change_password(
+    payload: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change the current user's password and return a fresh JWT."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
+
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(current_user)
+    logging.info(f"Password updated for user {current_user.id}")
+    return _build_auth_response(current_user)
 
 
 # ==================== CALCULATOR ENDPOINTS ====================

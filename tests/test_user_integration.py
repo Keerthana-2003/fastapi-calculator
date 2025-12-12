@@ -276,6 +276,91 @@ class TestGetUser:
         assert "User not found" in response.json()["detail"]
 
 
+class TestProfileEndpoints:
+    """Integration tests for profile and password endpoints"""
+
+    def setup_method(self):
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+
+        reg = client.post(
+            "/register",
+            json={"username": "owner", "email": "owner@example.com", "password": "changeme123"},
+        )
+        assert reg.status_code == 201
+        self.token = reg.json()["access_token"]
+
+    def _auth_headers(self):
+        return {"Authorization": f"Bearer {self.token}"}
+
+    def test_get_me_success(self):
+        resp = client.get("/me", headers=self._auth_headers())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["email"] == "owner@example.com"
+        assert data["username"] == "owner"
+
+    def test_update_profile_success(self):
+        resp = client.put(
+            "/me",
+            headers={"Content-Type": "application/json", **self._auth_headers()},
+            json={"username": "owner2", "email": "owner2@example.com"},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["user"]["username"] == "owner2"
+        assert payload["user"]["email"] == "owner2@example.com"
+        assert payload["access_token"]
+
+    def test_update_profile_duplicate_email(self):
+        client.post(
+            "/register",
+            json={"username": "other", "email": "taken@example.com", "password": "changeme123"},
+        )
+
+        resp = client.put(
+            "/me",
+            headers={"Content-Type": "application/json", **self._auth_headers()},
+            json={"email": "taken@example.com"},
+        )
+        assert resp.status_code == 400
+        assert "Email already taken" in resp.json()["detail"]
+
+    def test_update_profile_missing_fields(self):
+        resp = client.put(
+            "/me",
+            headers={"Content-Type": "application/json", **self._auth_headers()},
+            json={},
+        )
+        assert resp.status_code == 400
+
+    def test_change_password_success(self):
+        resp = client.post(
+            "/me/password",
+            headers={"Content-Type": "application/json", **self._auth_headers()},
+            json={
+                "current_password": "changeme123",
+                "new_password": "newsecret456",
+                "confirm_new_password": "newsecret456",
+            },
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["access_token"]
+
+        bad_login = client.post(
+            "/users/login",
+            json={"email": "owner@example.com", "password": "changeme123"},
+        )
+        assert bad_login.status_code == 401
+
+        good_login = client.post(
+            "/users/login",
+            json={"email": "owner@example.com", "password": "newsecret456"},
+        )
+        assert good_login.status_code == 200
+
+
 class TestCalculatorEndpoints:
     """Test that calculator endpoints still work"""
 
